@@ -410,14 +410,13 @@ router.post("/:id/send", async (req, res) => {
     const pdfBuffer = await generatePayslipPdfBuffer(record, tenant, employee);
 
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
+      service: process.env.SMTP_SERVICE || "gmail",
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
+
 
     await transporter.sendMail({
       from: `"${tenant?.companyName || "Business OS"}" <${process.env.SMTP_USER}>`,
@@ -497,14 +496,13 @@ router.post("/send-all", async (req, res) => {
 
     const tenant = (await Tenant.findOne({ _id: req.tenantId })) || (await Tenant.findOne({ ownerId: req.user?._id }));
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
+      service: process.env.SMTP_SERVICE || "gmail",
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
+
 
     let sentCount = 0;
     let failedCount = 0;

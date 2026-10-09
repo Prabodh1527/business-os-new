@@ -64,6 +64,7 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Task title is required." });
     }
 
+    const identity = await getEmployeeIdentity(req);
     let resolvedEmail = identity ? identity.email : req.body.assignedToEmail || "";
     const assignedName = identity ? identity.name : assignedTo?.trim() || "Unassigned";
 

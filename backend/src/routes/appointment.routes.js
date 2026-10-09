@@ -20,8 +20,11 @@ router.get("/", async (req, res) => {
     const filter = { tenantId: req.tenantId };
     if (isEmployeeUser(req)) {
       const identity = await getEmployeeIdentity(req);
-      filter.employee = { $in: [identity.name, identity.employeeId, identity.email].filter(Boolean) };
+      if (identity) {
+        filter.employee = { $in: [identity.name, identity.employeeId, identity.email].filter(Boolean) };
+      }
     }
+
     const appointments = await Appointment.find(filter).sort({ createdAt: -1 });
 
     const todayStr = new Date().toISOString().slice(0, 10);
