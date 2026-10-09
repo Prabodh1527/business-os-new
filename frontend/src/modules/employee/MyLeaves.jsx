@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock, FileText, PlusCircle, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Clock, FileText, PlusCircle, Trash2, Calendar, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { deleteLeave, fetchLeaves, submitLeave } from "@/api/leaves.api";
+import { deleteLeave, fetchLeaves, submitLeave, fetchLeaveBalance } from "@/api/leaves.api";
 
 const initialForm = () => ({
   type: "Casual Leave",
@@ -12,9 +12,10 @@ const initialForm = () => ({
 });
 
 export default function MyLeaves() {
-  const { token } = useAuth();
+  const { user, token } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [history, setHistory] = useState([]);
+  const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -25,14 +26,18 @@ export default function MyLeaves() {
     if (!token) return;
     try {
       setError("");
-      const response = await fetchLeaves(token);
-      setHistory(response.leaves || response.data || []);
+      const [leaveRes, balRes] = await Promise.all([
+        fetchLeaves(token),
+        user?.employeeId ? fetchLeaveBalance(user.employeeId, token) : Promise.resolve({ balance: [] }),
+      ]);
+      setHistory(leaveRes.leaves || leaveRes.data || []);
+      setBalances(balRes.balance || balRes.data || []);
     } catch (loadError) {
       setError(loadError.message || "Unable to load leave requests.");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, user?.employeeId]);
 
   useEffect(() => {
     loadLeaves();
@@ -58,6 +63,7 @@ export default function MyLeaves() {
         to: form.halfDay ? form.from : form.to,
         days: calculatedDays,
         reason: form.reason.trim(),
+        isHalfDay: form.halfDay,
       }, token);
       setSubmitted(true);
       setForm(initialForm());
@@ -91,62 +97,216 @@ export default function MyLeaves() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">My Leaves & Time Off</h1>
-        <p className="mt-1 text-sm text-slate-400">Submit leave requests and track their approval status.</p>
+        <p className="mt-1 text-sm text-slate-400">
+          Check live annual leave entitlements, apply for time off, and track supervisor reviews.
+        </p>
       </div>
 
-      {error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-sm text-rose-300">{error}</p>}
-      {submitted && <p className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-sm text-emerald-300"><CheckCircle2 size={16} />Leave request submitted for owner review.</p>}
+      {error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-300">{error}</p>}
+      {submitted && <p className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-xs text-emerald-300"><CheckCircle2 size={16} />Leave request submitted for review.</p>}
 
+      {/* Dynamic Leave Balances from Master */}
+      {balances.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {balances.map((b, idx) => (
+            <div key={idx} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+              <span className="text-[11px] font-semibold uppercase text-slate-400">{b.type}</span>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-white">{b.remaining}</span>
+                <span className="text-xs text-slate-400">/ {b.entitled} days left</span>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500">
+                {b.used} days used this year • {b.isPaid ? "Paid Leave" : "Unpaid Leave"}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Status Counters */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          ["Pending", pendingCount, "text-amber-400"],
-          ["Approved", approvedCount, "text-emerald-400"],
-          ["Rejected", rejectedCount, "text-rose-400"],
+          ["Pending Review", pendingCount, "text-amber-400"],
+          ["Approved Leaves", approvedCount, "text-emerald-400"],
+          ["Rejected Requests", rejectedCount, "text-rose-400"],
         ].map(([label, value, color]) => (
           <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label} requests</p>
-            <p className={`mt-2 text-3xl font-bold ${color}`}>{loading ? "…" : value}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+            <p className={`mt-2 text-2xl font-bold ${color}`}>{loading ? "…" : value}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-7">
-        <div className="mb-5 flex items-center gap-2.5 text-white"><PlusCircle size={20} className="text-emerald-400" /><h2 className="text-lg font-semibold">Apply for Leave</h2></div>
+      {/* Apply Form */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-7 shadow-xl">
+        <div className="mb-5 flex items-center gap-2.5 text-white">
+          <PlusCircle size={20} className="text-indigo-400" />
+          <h2 className="text-base font-semibold">Apply for Leave</h2>
+        </div>
         <form onSubmit={submitRequest} className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-slate-300">Leave Type</label>
-            <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-emerald-500">
-              <option>Casual Leave</option><option>Sick Leave</option><option>Paid Vacation</option><option>Emergency Leave</option>
+            <label className="text-xs font-medium text-slate-300">Leave Category</label>
+            <select
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-white outline-none focus:border-indigo-500"
+            >
+              {balances.length > 0 ? (
+                balances.map((b, idx) => (
+                  <option key={idx} value={b.type}>
+                    {b.type} ({b.remaining} remaining, {b.isPaid ? "Paid" : "Unpaid"})
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option>Casual Leave</option>
+                  <option>Sick Leave</option>
+                  <option>Paid Vacation</option>
+                  <option>Emergency Leave</option>
+                  <option>Unpaid Leave</option>
+                </>
+              )}
             </select>
           </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <div><label className="text-xs font-medium text-slate-300">From Date</label><input type="date" required value={form.from} onChange={(event) => setForm({ ...form, from: event.target.value, to: form.halfDay ? event.target.value : form.to })} className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500" /></div>
-            <div><label className="text-xs font-medium text-slate-300">To Date</label><input type="date" required min={form.from} disabled={form.halfDay} value={form.to} onChange={(event) => setForm({ ...form, to: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none focus:border-emerald-500 disabled:opacity-50" /></div>
+            <div>
+              <label className="text-xs font-medium text-slate-300">From Date</label>
+              <input
+                type="date"
+                required
+                value={form.from}
+                onChange={(e) =>
+                  setForm({ ...form, from: e.target.value, to: form.halfDay ? e.target.value : form.to })
+                }
+                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-300">To Date</label>
+              <input
+                type="date"
+                required
+                min={form.from}
+                disabled={form.halfDay}
+                value={form.to}
+                onChange={(e) => setForm({ ...form, to: e.target.value })}
+                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white outline-none focus:border-indigo-500 disabled:opacity-50"
+              />
+            </div>
           </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3.5">
-            <label className="flex cursor-pointer items-center gap-2.5 text-xs text-slate-300"><input type="checkbox" checked={form.halfDay} onChange={(event) => setForm({ ...form, halfDay: event.target.checked, to: event.target.checked ? form.from : form.to })} className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-emerald-600" />Half-day request</label>
-            <span className="text-xs font-semibold text-emerald-400">Duration: {calculatedDays} {calculatedDays === 1 ? "day" : "days"}</span>
+            <label className="flex cursor-pointer items-center gap-2.5 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={form.halfDay}
+                onChange={(e) =>
+                  setForm({ ...form, halfDay: e.target.checked, to: e.target.checked ? form.from : form.to })
+                }
+                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-indigo-600"
+              />
+              Half-day request (0.5 day)
+            </label>
+            <span className="text-xs font-semibold text-indigo-400">
+              Calculated: {calculatedDays} {calculatedDays === 1 ? "day" : "days"}
+            </span>
           </div>
-          <div><label className="text-xs font-medium text-slate-300">Reason & Handover Details</label><textarea required rows="3" value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} placeholder="Describe the reason for your request." className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white outline-none focus:border-emerald-500" /></div>
-          <button type="submit" disabled={submitting || calculatedDays <= 0} className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"><PlusCircle size={16} />{submitting ? "Submitting…" : "Submit Leave Request"}</button>
+
+          <div>
+            <label className="text-xs font-medium text-slate-300">Reason</label>
+            <textarea
+              required
+              rows="2"
+              value={form.reason}
+              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              placeholder="State the reason for leave and handover contact..."
+              className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting || calculatedDays <= 0}
+            className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          >
+            <PlusCircle size={15} />
+            {submitting ? "Submitting…" : "Submit Leave Request"}
+          </button>
         </form>
       </div>
 
-      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+      {/* History */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-lg font-semibold text-white">Leave History & Tracker</h2><p className="text-xs text-slate-400">Requests shared with your business owner for approval.</p></div>
-          <div className="flex items-center gap-2">{["ALL", "Pending", "Approved", "Rejected"].map((filter) => <button key={filter} onClick={() => setStatusFilter(filter)} className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${statusFilter === filter ? "bg-emerald-600 text-white" : "border border-slate-800 bg-slate-950 text-slate-400 hover:text-white"}`}>{filter}</button>)}</div>
+          <div>
+            <h2 className="text-base font-semibold text-white">Leave History & Tracker</h2>
+            <p className="text-xs text-slate-400">Review status and supervisor responses.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {["ALL", "Pending", "Approved", "Rejected"].map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setStatusFilter(filter)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                  statusFilter === filter
+                    ? "bg-indigo-600 text-white"
+                    : "border border-slate-800 bg-slate-950 text-slate-400 hover:text-white"
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
         </div>
-        {loading ? <p className="py-8 text-center text-sm text-slate-400">Loading leave history…</p> : filteredHistory.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No leave requests found.</p> : (
+
+        {loading ? (
+          <p className="py-8 text-center text-xs text-slate-400">Loading leave history…</p>
+        ) : filteredHistory.length === 0 ? (
+          <p className="py-8 text-center text-xs text-slate-500">No leave requests found.</p>
+        ) : (
           <div className="space-y-3">
             {filteredHistory.map((item) => (
-              <div key={item._id} className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:flex-row sm:items-center">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2"><span className="text-sm font-semibold text-white">{item.type}</span><span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${item.status === "Approved" ? "bg-emerald-500/10 text-emerald-400" : item.status === "Pending" ? "bg-amber-500/10 text-amber-400" : "bg-rose-500/10 text-rose-400"}`}>{item.status}</span></div>
-                  <p className="text-xs font-medium text-slate-300">{item.from} – {item.to} ({item.days} {item.days === 1 ? "day" : "days"})</p>
-                  <p className="text-xs text-slate-400">Reason: {item.reason}</p>
+              <div
+                key={item._id}
+                className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:flex-row sm:items-center"
+              >
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white">{item.type}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        item.status === "Approved"
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : item.status === "Pending"
+                          ? "bg-amber-500/10 text-amber-400"
+                          : "bg-rose-500/10 text-rose-400"
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                    <span className="text-slate-500 font-mono">
+                      {item.isPaid ? "Paid Leave" : "Unpaid (LOP)"}
+                    </span>
+                  </div>
+                  <p className="font-medium text-slate-300">
+                    {item.from} – {item.to} ({item.days} {item.days === 1 ? "day" : "days"})
+                  </p>
+                  <p className="text-slate-400">Reason: {item.reason}</p>
+                  {item.rejectionReason && (
+                    <p className="text-rose-400 font-medium">Rejection Reason: "{item.rejectionReason}"</p>
+                  )}
                 </div>
-                {item.status === "Pending" && <button onClick={() => cancelRequest(item._id)} className="flex items-center gap-1.5 self-start rounded-xl border border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 transition hover:border-rose-500 hover:text-rose-400 sm:self-auto"><Trash2 size={13} />Cancel Request</button>}
+
+                {item.status === "Pending" && (
+                  <button
+                    onClick={() => cancelRequest(item._id)}
+                    className="flex items-center gap-1.5 self-start rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-rose-500 hover:text-rose-400 sm:self-auto"
+                  >
+                    <Trash2 size={13} />
+                    Cancel
+                  </button>
+                )}
               </div>
             ))}
           </div>

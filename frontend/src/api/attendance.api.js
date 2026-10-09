@@ -1,4 +1,4 @@
-﻿const API_BASE =
+const API_BASE =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
   "http://localhost:5000";
 
@@ -12,6 +12,14 @@ export const fetchAttendance = async (token, params = {}) => {
   const url = `${API_BASE}/api/attendance${query ? `?${query}` : ""}`;
   const res = await fetch(url, { headers: getHeaders(token) });
   if (!res.ok) throw new Error("Failed to fetch attendance records");
+  return res.json();
+};
+
+export const fetchAttendanceSummary = async (token, params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = `${API_BASE}/api/attendance/summary${query ? `?${query}` : ""}`;
+  const res = await fetch(url, { headers: getHeaders(token) });
+  if (!res.ok) throw new Error("Failed to fetch attendance summary");
   return res.json();
 };
 
@@ -47,7 +55,23 @@ export const recordAttendance = async (data, token) => {
     headers: getHeaders(token),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to save attendance record");
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Failed to save attendance record");
+  }
+  return res.json();
+};
+
+export const updateAttendanceRecord = async (id, data, token) => {
+  const res = await fetch(`${API_BASE}/api/attendance/${id}`, {
+    method: "PATCH",
+    headers: getHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Failed to update attendance record");
+  }
   return res.json();
 };
 

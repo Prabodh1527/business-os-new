@@ -1,6 +1,6 @@
 import StaffSubNav from "@/components/employees/StaffSubNav";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Users,
   BadgeCheck,
@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   Clock,
+  Archive,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {

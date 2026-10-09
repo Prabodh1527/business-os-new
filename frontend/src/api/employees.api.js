@@ -73,6 +73,52 @@ export const deleteEmployee = async (id, token) => {
     method: "DELETE",
     headers: getHeaders(token),
   });
-  if (!response.ok) throw new Error("Failed to delete employee");
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || "Failed to delete employee");
+  }
+  return response.json();
+};
+
+// ==========================================
+// ARCHIVE METHODS (Settings Section)
+// ==========================================
+export const fetchArchivedEmployees = async (token) => {
+  const response = await fetch(`${API_BASE}/api/employees/archived`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error("Failed to fetch archived employees");
+  return response.json();
+};
+
+export const fetchArchivedEmployeeById = async (id, token) => {
+  const response = await fetch(`${API_BASE}/api/employees/archived/${id}`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error("Failed to fetch archived employee details");
+  return response.json();
+};
+
+export const restoreArchivedEmployee = async (id, token) => {
+  const response = await fetch(`${API_BASE}/api/employees/archived/${id}/restore`, {
+    method: "POST",
+    headers: getHeaders(token),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || "Failed to restore employee");
+  }
+  return response.json();
+};
+
+export const purgeArchivedEmployee = async (id, token) => {
+  const response = await fetch(`${API_BASE}/api/employees/archived/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(token),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || "Failed to purge archive record");
+  }
   return response.json();
 };

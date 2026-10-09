@@ -87,6 +87,7 @@ import Integrations from "@/modules/settings/Integrations";
 import Subscription from "@/modules/settings/Subscription";
 import Appearance from "@/modules/settings/Appearance";
 import Masters from "@/modules/settings/Masters";
+import ArchivedEmployees from "@/modules/settings/ArchivedEmployees";
 
 // Notifications
 import Notifications from "@/modules/notifications/Notifications";
@@ -416,6 +417,10 @@ export default function AppRoutes() {
         <Route
           path="/settings/masters"
           element={<Masters />}
+        />
+        <Route
+          path="/settings/archived-employees"
+          element={<ArchivedEmployees />}
         />
 
         {/* General */}

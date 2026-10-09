@@ -1,14 +1,16 @@
-﻿import express from "express";
+import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import { attachTenantDB } from "../middleware/tenant.middleware.js";
 import Attendance from "../models/attendance.model.js";
 import AttendanceCorrection from "../models/attendanceCorrection.model.js";
+import Employee from "../models/employee.model.js";
+import Leave from "../models/leave.model.js";
 import { getEmployeeIdentity, isEmployeeUser } from "../utils/employeeIdentity.js";
 
 const router = express.Router();
-
 router.use(protect, attachTenantDB);
 
+// GET /api/attendance/corrections
 router.get("/corrections", async (req, res) => {
   try {
     const filter = { tenantId: req.tenantId };
@@ -28,6 +30,7 @@ router.get("/corrections", async (req, res) => {
   }
 });
 
+// POST /api/attendance/corrections
 router.post("/corrections", async (req, res) => {
   try {
     if (!isEmployeeUser(req)) {
@@ -40,9 +43,9 @@ router.post("/corrections", async (req, res) => {
     }
     const correction = await AttendanceCorrection.create({
       tenantId: req.tenantId,
-      employeeId: identity.employeeId,
-      employeeEmail: identity.email,
-      employeeName: identity.name,
+      employeeId: identity.employeeId || "",
+      employeeEmail: identity.email || "",
+      employeeName: identity.name || req.user?.name || "Staff",
       date,
       checkIn,
       checkOut,
@@ -50,11 +53,11 @@ router.post("/corrections", async (req, res) => {
     });
     return res.status(201).json({ success: true, correction, data: correction });
   } catch (error) {
-    console.error("❌ Create Attendance Correction Error:", error);
     return res.status(400).json({ success: false, message: error.message });
   }
 });
 
+// PATCH /api/attendance/corrections/:id
 router.patch("/corrections/:id", async (req, res) => {
   try {
     if (isEmployeeUser(req)) {
@@ -72,12 +75,13 @@ router.patch("/corrections/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Pending attendance correction not found." });
     }
     if (req.body.status === "Approved") {
+      const matchQuery = {
+        tenantId: req.tenantId,
+        date: correction.date,
+        ...(correction.employeeId ? { employeeId: correction.employeeId } : { employeeName: correction.employeeName }),
+      };
       await Attendance.findOneAndUpdate(
-        {
-          tenantId: req.tenantId,
-          date: correction.date,
-          ...(correction.employeeId ? { employeeId: correction.employeeId } : { employeeName: correction.employeeName }),
-        },
+        matchQuery,
         {
           $set: {
             employeeId: correction.employeeId,
@@ -88,22 +92,94 @@ router.patch("/corrections/:id", async (req, res) => {
             status: "Present",
             notes: `Attendance correction approved: ${correction.reason}`,
           },
+          $push: {
+            auditTrail: {
+              modifiedBy: req.user?.name || "Owner",
+              modifiedAt: new Date(),
+              reason: `Approved correction request: ${correction.reason}`,
+              previousStatus: "Absent/Pending",
+              newStatus: "Present",
+            },
+          },
         },
         { upsert: true, new: true, runValidators: true }
       );
     }
     return res.status(200).json({ success: true, correction, data: correction });
   } catch (error) {
-    console.error("❌ Review Attendance Correction Error:", error);
     return res.status(400).json({ success: false, message: error.message });
   }
 });
 
-// GET /api/attendance
+// GET /api/attendance/summary (monthly summary for an employee or all employees)
+router.get("/summary", async (req, res) => {
+  try {
+    const { month, year, employeeId } = req.query;
+    const now = new Date();
+    const targetYear = Number(year) || now.getFullYear();
+    const targetMonth = month ? Number(month) : (now.getMonth() + 1);
+
+    const startDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
+    const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+    const endDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    const filter = {
+      tenantId: req.tenantId,
+      date: { $gte: startDate, $lte: endDate },
+    };
+
+    if (isEmployeeUser(req)) {
+      const identity = await getEmployeeIdentity(req);
+      filter.$or = [
+        ...(identity.employeeId ? [{ employeeId: identity.employeeId }] : []),
+        ...(identity.name ? [{ employeeName: identity.name }] : []),
+      ];
+    } else if (employeeId) {
+      filter.employeeId = employeeId;
+    }
+
+    const records = await Attendance.find(filter);
+
+    let present = 0, late = 0, halfDay = 0, absent = 0, onLeave = 0, totalHours = 0;
+    records.forEach(r => {
+      if (r.status === "Present") present++;
+      else if (r.status === "Late") late++;
+      else if (r.status === "Half Day") halfDay++;
+      else if (r.status === "Absent") absent++;
+      else if (r.status === "On Leave") onLeave++;
+      totalHours += Number(r.hours || 0);
+    });
+
+    const totalDaysRecorded = records.length;
+    return res.status(200).json({
+      success: true,
+      summary: {
+        year: targetYear,
+        month: targetMonth,
+        startDate,
+        endDate,
+        totalDaysRecorded,
+        present,
+        late,
+        halfDay,
+        absent,
+        onLeave,
+        totalHours: Math.round(totalHours * 10) / 10,
+        paidDaysEquivalent: present + late + (halfDay * 0.5) + onLeave,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/attendance (main list with date/employee filter)
 router.get("/", async (req, res) => {
   try {
     const filter = { tenantId: req.tenantId };
     if (req.query.date) filter.date = req.query.date;
+    if (req.query.status) filter.status = req.query.status;
+
     if (isEmployeeUser(req)) {
       const identity = await getEmployeeIdentity(req);
       filter.$or = [
@@ -114,7 +190,7 @@ router.get("/", async (req, res) => {
       filter.employeeId = req.query.employeeId;
     }
 
-    const records = await Attendance.find(filter).sort({ createdAt: -1 });
+    const records = await Attendance.find(filter).sort({ date: -1, createdAt: -1 });
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const todayRecords = records.filter((r) => r.date === todayStr);
@@ -122,11 +198,13 @@ router.get("/", async (req, res) => {
     let presentCount = 0;
     let lateCount = 0;
     let absentCount = 0;
+    let halfDayCount = 0;
 
     todayRecords.forEach((r) => {
       if (r.status === "Present") presentCount++;
       else if (r.status === "Late") lateCount++;
       else if (r.status === "Absent") absentCount++;
+      else if (r.status === "Half Day") halfDayCount++;
     });
 
     return res.status(200).json({
@@ -137,6 +215,7 @@ router.get("/", async (req, res) => {
         presentCount,
         lateCount,
         absentCount,
+        halfDayCount,
       },
       attendance: records,
       data: records,
@@ -235,32 +314,65 @@ router.post("/clock-out", async (req, res) => {
   }
 });
 
-// POST /api/attendance
+// POST /api/attendance (owner manual mark)
 router.post("/", async (req, res) => {
   try {
     if (isEmployeeUser(req)) {
       return res.status(403).json({ success: false, message: "Use the clock-in action to record attendance." });
     }
-    const { employeeName, role, date, checkIn, checkOut, status, notes } = req.body;
+    const { employeeId = "", employeeName, role, date, checkIn, checkOut, status, notes, reason } = req.body;
 
     if (!employeeName) {
       return res.status(400).json({ success: false, message: "Employee name is required" });
     }
 
+    const targetDate = date || new Date().toISOString().slice(0, 10);
+
+    // Prevent conflicting duplicate attendance records for the same employee and date
+    const existing = await Attendance.findOne({
+      tenantId: req.tenantId,
+      date: targetDate,
+      ...(employeeId ? { employeeId } : { employeeName }),
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: `Attendance record already exists for ${employeeName} on ${targetDate}. Please update the existing record instead.`,
+      });
+    }
+
+    let calculatedHours = 0;
+    if (checkIn && checkOut && checkOut !== "-") {
+      const inTime = new Date(`1970-01-01 ${checkIn}`);
+      const outTime = new Date(`1970-01-01 ${checkOut}`);
+      if (!isNaN(outTime - inTime) && outTime > inTime) {
+        calculatedHours = Math.round(((outTime - inTime) / 3600000) * 100) / 100;
+      }
+    }
+
     const newRecord = await Attendance.create({
       tenantId: req.tenantId,
+      employeeId,
       employeeName,
       role: role || "Staff",
-      date: date || new Date().toISOString().slice(0, 10),
+      date: targetDate,
       checkIn: checkIn || "09:00 AM",
       checkOut: checkOut || "-",
+      hours: calculatedHours,
       status: status || "Present",
       notes: notes || "",
+      auditTrail: [{
+        modifiedBy: req.user?.name || "Owner",
+        modifiedAt: new Date(),
+        reason: reason || "Initial manual attendance record",
+        newStatus: status || "Present",
+      }],
     });
 
     return res.status(201).json({
       success: true,
-      message: "Attendance recorded",
+      message: "Attendance recorded successfully",
       attendance: newRecord,
       data: newRecord,
     });
@@ -269,19 +381,54 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PATCH /:id
+// PATCH /api/attendance/:id (manual correction with audit trail)
 router.patch("/:id", async (req, res) => {
   try {
     if (isEmployeeUser(req)) {
-      return res.status(403).json({ success: false, message: "Employees cannot edit attendance records." });
+      return res.status(403).json({ success: false, message: "Employees cannot edit attendance records directly." });
     }
+    const current = await Attendance.findOne({ _id: req.params.id, tenantId: req.tenantId });
+    if (!current) return res.status(404).json({ success: false, message: "Attendance record not found" });
+
+    const { status, checkIn, checkOut, notes, reason } = req.body;
+    const auditReason = reason?.trim() || "Manual correction by management";
+
+    const updateObj = {};
+    if (status) updateObj.status = status;
+    if (checkIn) updateObj.checkIn = checkIn;
+    if (checkOut) updateObj.checkOut = checkOut;
+    if (notes !== undefined) updateObj.notes = notes;
+
+    if (checkIn || checkOut) {
+      const finalIn = checkIn || current.checkIn;
+      const finalOut = checkOut || current.checkOut;
+      if (finalIn && finalOut && finalOut !== "-") {
+        const inTime = new Date(`1970-01-01 ${finalIn}`);
+        const outTime = new Date(`1970-01-01 ${finalOut}`);
+        if (!isNaN(outTime - inTime) && outTime > inTime) {
+          updateObj.hours = Math.round(((outTime - inTime) / 3600000) * 100) / 100;
+        }
+      }
+    }
+
     const updated = await Attendance.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.tenantId },
-      { $set: req.body },
+      {
+        $set: updateObj,
+        $push: {
+          auditTrail: {
+            modifiedBy: req.user?.name || "Owner",
+            modifiedAt: new Date(),
+            reason: auditReason,
+            previousStatus: current.status,
+            newStatus: status || current.status,
+          },
+        },
+      },
       { new: true }
     );
-    if (!updated) return res.status(404).json({ success: false, message: "Record not found" });
-    return res.status(200).json({ success: true, message: "Updated", attendance: updated, data: updated });
+
+    return res.status(200).json({ success: true, message: "Attendance updated with audit entry", attendance: updated, data: updated });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
   }

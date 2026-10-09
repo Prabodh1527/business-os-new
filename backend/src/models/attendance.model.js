@@ -1,4 +1,12 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
+
+const auditEntrySchema = new mongoose.Schema({
+  modifiedBy: { type: String, default: "Owner" },
+  modifiedAt: { type: Date, default: Date.now },
+  reason: { type: String, default: "" },
+  previousStatus: { type: String },
+  newStatus: { type: String },
+}, { _id: false });
 
 const attendanceSchema = new mongoose.Schema(
   {
@@ -10,6 +18,7 @@ const attendanceSchema = new mongoose.Schema(
     employeeId: {
       type: String,
       default: "",
+      index: true,
     },
     employeeName: {
       type: String,
@@ -45,10 +54,12 @@ const attendanceSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    auditTrail: [auditEntrySchema],
   },
   { timestamps: true }
 );
 
+attendanceSchema.index({ tenantId: 1, date: 1, employeeId: 1 });
 attendanceSchema.index({ tenantId: 1, date: 1, employeeName: 1 });
 
 const Attendance =

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Database,
   Loader2,
+  Archive,
 } from "lucide-react";
 import API from "@/api/axios";
 
@@ -76,6 +77,14 @@ const settingsCards = [
       "Manage services, categories, roles and business configurations.",
     path: "/settings/masters",
     icon: Database,
+  },
+
+  {
+    title: "Archived Staff Records",
+    description:
+      "Historical payslips, attendance, and leave records for offboarded employees.",
+    path: "/settings/archived-employees",
+    icon: Archive,
   },
 ];
 
