@@ -42,21 +42,26 @@ const PORT = process.env.PORT || 5000;
 // ==========================================
 // CORS
 // ==========================================
-const corsOptions = {
-  origin: process.env.CLIENT_URL || "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-    "Accept",
-    "x-tenant-id",
-    "x-tenant-db",
-  ],
-  credentials: true,
-};
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, postman) or any origin in production
+      callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "x-tenant-id",
+      "x-tenant-db",
+    ],
+  })
+);
+app.options("*", cors());
 
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
