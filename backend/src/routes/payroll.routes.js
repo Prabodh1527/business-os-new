@@ -471,6 +471,113 @@ router.post("/:id/send", async (req, res) => {
   }
 });
 
+// ── POST /api/payroll/send-all (bulk email payslips for month) ────────────────
+router.post("/send-all", async (req, res) => {
+  try {
+    if (isEmployeeUser(req)) return res.status(403).json({ success: false, message: "Owner access only." });
+    const { month } = req.body;
+    if (!month) return res.status(400).json({ success: false, message: "Payroll month is required." });
+
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(400).json({
+        success: false,
+        message: "Email SMTP configuration is missing. Configure SMTP_USER and SMTP_PASS.",
+      });
+    }
+
+    const records = await Payroll.find({
+      tenantId: req.tenantId,
+      month,
+      status: { $in: ["Calculated", "Reviewed", "Approved", "Paid"] },
+    });
+
+    if (!records.length) {
+      return res.status(404).json({ success: false, message: "No payroll records found for this month." });
+    }
+
+    const tenant = (await Tenant.findOne({ _id: req.tenantId })) || (await Tenant.findOne({ ownerId: req.user?._id }));
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const record of records) {
+      const recipientEmail =
+        record.employeeEmail ||
+        (await Employee.findOne({ tenantId: req.tenantId, employeeId: record.employeeId }))?.email;
+
+      if (!recipientEmail) {
+        failedCount++;
+        continue;
+      }
+
+      try {
+        const employee = await Employee.findOne({ tenantId: req.tenantId, employeeId: record.employeeId });
+        const pdfBuffer = await generatePayslipPdfBuffer(record, tenant, employee);
+
+        await transporter.sendMail({
+          from: `"${tenant?.companyName || "Business OS"}" <${process.env.SMTP_USER}>`,
+          to: recipientEmail,
+          subject: `Official Salary Statement - ${record.month} - ${tenant?.companyName || "Business OS"}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; background: #f8fafc; border-radius: 12px;">
+              <h2 style="color: #4f46e5; margin-top: 0;">Salary Statement Issued</h2>
+              <p>Dear <strong>${record.employee}</strong>,</p>
+              <p>Your official salary statement for <strong>${record.month}</strong> has been finalized and issued.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <tr style="border-bottom: 1px solid #e2e8f0; padding: 10px;">
+                  <td style="padding: 10px; color: #64748b;">Gross Earnings:</td>
+                  <td style="padding: 10px; font-weight: bold; text-align: right;">₹${Number(record.grossEarnings || record.salary || 0).toLocaleString("en-IN")}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #e2e8f0; padding: 10px;">
+                  <td style="padding: 10px; color: #64748b;">Total Deductions:</td>
+                  <td style="padding: 10px; font-weight: bold; text-align: right; color: #e11d48;">₹${Number(record.totalDeductions || record.deduction || 0).toLocaleString("en-IN")}</td>
+                </tr>
+                <tr style="background: #f1f5f9; padding: 10px;">
+                  <td style="padding: 10px; font-weight: bold; color: #1e293b;">Net Take-Home Pay:</td>
+                  <td style="padding: 10px; font-weight: bold; text-align: right; color: #059669; font-size: 16px;">₹${Number(record.netSalary || record.net || 0).toLocaleString("en-IN")}</td>
+                </tr>
+              </table>
+              <p>Attached is your formal PDF payslip with complete itemized breakdown of earnings, deductions, and attendance records.</p>
+            </div>
+          `,
+          attachments: [
+            {
+              filename: `Payslip_${record.month.replace(/\s+/g, "_")}.pdf`,
+              content: pdfBuffer,
+            },
+          ],
+        });
+
+        record.payslipSentAt = new Date();
+        await record.save();
+        sentCount++;
+      } catch (e) {
+        console.warn(`Failed to email payslip to ${recipientEmail}:`, e.message);
+        failedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Bulk payslips sent: ${sentCount} succeeded, ${failedCount} skipped/failed.`,
+      sentCount,
+      failedCount,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 // ── GET /api/payroll (list with filters) ──────────────────────────────────────
 router.get("/", async (req, res) => {
   try {

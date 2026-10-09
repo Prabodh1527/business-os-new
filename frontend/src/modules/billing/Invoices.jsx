@@ -13,6 +13,7 @@ import {
   CreditCard,
   FileText,
   Trash2,
+  Send,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -20,6 +21,8 @@ import {
   recordInvoicePayment,
   updateInvoiceStatus,
   deleteInvoice,
+  downloadInvoicePdf,
+  emailInvoice,
 } from "@/api/billing.api";
 
 export default function Invoices() {
@@ -182,32 +185,30 @@ export default function Invoices() {
     link.click();
   };
 
-  // PDF Export
-  const downloadPDF = () => {
-    const element = document.getElementById("printable-invoice");
-    if (!element) return;
-
-    const generate = () => {
-      const opt = {
-        margin: 0.4,
-        filename: `${selectedInvoice.invoiceNumber}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      };
-      window.html2pdf().set(opt).from(element).save();
-    };
-
-    if (window.html2pdf) {
-      generate();
-    } else {
-      const script = document.createElement("script");
-      script.src =
-        "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      script.onload = generate;
-      document.body.appendChild(script);
+  // Direct Backend PDF Export
+  const downloadPDF = async () => {
+    if (!selectedInvoice) return;
+    try {
+      await downloadInvoicePdf(selectedInvoice._id, selectedInvoice.invoiceNumber, token);
+    } catch (err) {
+      alert("Failed to download invoice PDF: " + err.message);
     }
   };
+
+  // 1-Click Email Invoice Dispatch
+  const handleEmailInvoice = async (invoice) => {
+    const defaultEmail = invoice.customer?.email || "";
+    const emailPrompt = window.prompt(`Send Invoice #${invoice.invoiceNumber} to email:`, defaultEmail);
+    if (!emailPrompt) return;
+
+    try {
+      const res = await emailInvoice(invoice._id, emailPrompt.trim(), token);
+      alert(res.message || "Invoice successfully emailed!");
+    } catch (err) {
+      alert("Failed to send invoice email: " + err.message);
+    }
+  };
+
 
   const filteredInvoices = invoices.filter(
     (inv) =>
@@ -412,10 +413,24 @@ export default function Invoices() {
                         </button>
                       )}
                       <button
+                        onClick={() => handleEmailInvoice(inv)}
+                        className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-1.5 text-xs text-sky-400 hover:bg-sky-500/20 transition cursor-pointer"
+                        title="Email Invoice to Client"
+                      >
+                        <Send size={13} />
+                      </button>
+                      <button
+                        onClick={() => downloadInvoicePdf(inv._id, inv.invoiceNumber, token)}
+                        className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-1.5 text-xs text-violet-400 hover:bg-violet-500/20 transition cursor-pointer"
+                        title="Download Tax Invoice PDF"
+                      >
+                        <Download size={13} />
+                      </button>
+                      <button
                         onClick={() => setSelectedInvoice(inv)}
                         className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition cursor-pointer"
                       >
-                        PDF Preview
+                        Preview
                       </button>
                       <button
                         onClick={() => handleDeleteInvoice(inv._id, inv.invoiceNumber)}
@@ -428,6 +443,7 @@ export default function Invoices() {
                   </tr>
                 );
               })}
+
             </tbody>
           </table>
         )}

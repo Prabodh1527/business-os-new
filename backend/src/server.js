@@ -31,6 +31,7 @@ import taskRoutes from "./routes/task.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import auditLogRoutes from "./routes/auditLog.routes.js";
 
 // Connect to Master MongoDB
 connectDB();
@@ -115,6 +116,8 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/audit-logs", auditLogRoutes);
+app.use("/audit-logs", auditLogRoutes);
 
 // ==========================================
 // HEALTH CHECK

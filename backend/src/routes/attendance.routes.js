@@ -6,6 +6,7 @@ import AttendanceCorrection from "../models/attendanceCorrection.model.js";
 import Employee from "../models/employee.model.js";
 import Leave from "../models/leave.model.js";
 import { getEmployeeIdentity, isEmployeeUser } from "../utils/employeeIdentity.js";
+import { recordAuditLog } from "../utils/auditLogger.js";
 
 const router = express.Router();
 router.use(protect, attachTenantDB);
@@ -318,6 +319,16 @@ router.post("/clock-in", async (req, res) => {
       status: "Present",
     });
 
+    recordAuditLog({
+      tenantId: req.tenantId,
+      user: req.user,
+      action: "CLOCK_IN",
+      module: "ATTENDANCE",
+      targetId: record._id.toString(),
+      details: `${name} clocked in at ${timeStr}`,
+    });
+
+
     return res.status(201).json({
       success: true,
       message: `Clocked in at ${timeStr}`,
@@ -358,6 +369,16 @@ router.post("/clock-out", async (req, res) => {
       record.hours = Math.round((elapsedMs / 3600000) * 100) / 100;
     }
     await record.save();
+
+    recordAuditLog({
+      tenantId: req.tenantId,
+      user: req.user,
+      action: "CLOCK_OUT",
+      module: "ATTENDANCE",
+      targetId: record._id.toString(),
+      details: `${name} clocked out at ${timeStr} (${record.hours} hours logged)`,
+    });
+
 
     return res.status(200).json({
       success: true,

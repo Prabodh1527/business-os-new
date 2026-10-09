@@ -5,6 +5,9 @@ import { protect } from "../middleware/auth.middleware.js";
 import { attachTenantDB } from "../middleware/tenant.middleware.js";
 import Invoice from "../models/invoice.model.js";
 import Inventory from "../models/inventory.model.js";
+import Tenant from "../models/Tenant.js";
+import { generateInvoicePdfBuffer } from "../utils/invoicePdf.js";
+import { recordAuditLog } from "../utils/auditLogger.js";
 
 const router = express.Router();
 
@@ -330,7 +333,107 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // ==========================================
-// 6. DELETE INVOICE
+// 6. DOWNLOAD INVOICE PDF
+// GET /api/invoices/:id/pdf
+// ==========================================
+router.get("/:id/pdf", async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({ _id: req.params.id, tenantId: req.tenantId });
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    const tenant = (await Tenant.findOne({ _id: req.tenantId })) || (await Tenant.findOne({ ownerId: req.user?._id }));
+    const pdfBuffer = await generateInvoicePdfBuffer(invoice, tenant);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="Invoice_${invoice.invoiceNumber}.pdf"`
+    );
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("❌ Invoice PDF generation error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// 7. EMAIL INVOICE WITH ATTACHED PDF
+// POST /api/invoices/:id/send
+// ==========================================
+router.post("/:id/send", async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({ _id: req.params.id, tenantId: req.tenantId });
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    const recipientEmail = req.body.email || invoice.customer?.email;
+    if (!recipientEmail) {
+      return res.status(400).json({ success: false, message: "Customer email address is required to send invoice." });
+    }
+
+    const transporter = createTransporter();
+    if (!transporter) {
+      return res.status(400).json({
+        success: false,
+        message: "SMTP configuration is missing. Configure SMTP_USER and SMTP_PASS.",
+      });
+    }
+
+    const tenant = (await Tenant.findOne({ _id: req.tenantId })) || (await Tenant.findOne({ ownerId: req.user?._id }));
+    const pdfBuffer = await generateInvoicePdfBuffer(invoice, tenant);
+
+    await transporter.sendMail({
+      from: `"${tenant?.companyName || "Business OS"}" <${process.env.SMTP_USER}>`,
+      to: recipientEmail,
+      subject: `Invoice #${invoice.invoiceNumber} from ${tenant?.companyName || "Business OS"}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 25px;">
+          <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 28px;">
+            <h2 style="color: #4f46e5; margin: 0 0 8px 0;">${tenant?.companyName || "Business OS"}</h2>
+            <h3 style="margin: 0 0 16px 0; color: #1e293b;">Invoice #${invoice.invoiceNumber}</h3>
+            <p>Dear <strong>${invoice.customer?.name || "Valued Client"}</strong>,</p>
+            <p>Please find attached the official tax invoice for your recent transaction.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 8px; font-size: 14px;">
+              <tr><td style="padding: 10px 14px; color: #64748b;">Grand Total:</td><td style="padding: 10px 14px; text-align: right; font-weight: bold;">₹${Number(invoice.grandTotal || 0).toLocaleString("en-IN")}</td></tr>
+              <tr><td style="padding: 10px 14px; color: #64748b;">Amount Paid:</td><td style="padding: 10px 14px; text-align: right; color: #10b981; font-weight: bold;">₹${Number(invoice.amountPaid || 0).toLocaleString("en-IN")}</td></tr>
+              <tr><td style="padding: 10px 14px; color: #64748b;">Balance Due:</td><td style="padding: 10px 14px; text-align: right; color: ${invoice.balanceDue > 0 ? "#dc2626" : "#10b981"}; font-weight: bold;">₹${Number(invoice.balanceDue || 0).toLocaleString("en-IN")}</td></tr>
+            </table>
+            <p style="font-size: 13px; color: #64748b;">The complete itemized invoice PDF has been attached to this email.</p>
+          </div>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `Invoice_${invoice.invoiceNumber}.pdf`,
+          content: pdfBuffer,
+        },
+      ],
+    });
+
+    recordAuditLog({
+      tenantId: req.tenantId,
+      user: req.user,
+      action: "EMAIL_INVOICE",
+      module: "INVOICES",
+      targetId: invoice._id.toString(),
+      details: `Emailed invoice #${invoice.invoiceNumber} to ${recipientEmail}`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice #${invoice.invoiceNumber} successfully emailed to ${recipientEmail}`,
+    });
+  } catch (err) {
+    console.error("❌ Email invoice error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// 8. DELETE INVOICE
 // DELETE /api/invoices/:id
 // ==========================================
 router.delete("/:id", async (req, res) => {
@@ -344,6 +447,15 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Invoice not found" });
     }
 
+    recordAuditLog({
+      tenantId: req.tenantId,
+      user: req.user,
+      action: "DELETE_INVOICE",
+      module: "INVOICES",
+      targetId: req.params.id,
+      details: `Deleted invoice #${deletedInvoice.invoiceNumber} (Total: ₹${deletedInvoice.grandTotal})`,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Invoice deleted successfully",
@@ -353,4 +465,4 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-export default router;
+export default router;

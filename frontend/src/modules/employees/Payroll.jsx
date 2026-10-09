@@ -37,11 +37,13 @@ import {
   approvePayroll,
   markPayrollPaid,
   sendPayslipEmail,
+  sendAllPayslips,
   downloadPayslipPdf,
   fetchPayrollRules,
   updatePayrollRules,
   createPayroll
 } from "@/api/payroll.api";
+
 import { fetchLeavePolicy, updateLeavePolicy } from "@/api/leaves.api";
 
 const formatCurrency = (val) =>
@@ -212,6 +214,24 @@ export default function Payroll() {
       setActionLoading(false);
     }
   };
+
+  // Bulk Email Payslips for entire month
+  const handleBulkEmailPayslips = async () => {
+    if (!window.confirm(`Are you sure you want to email payslips to ALL employees for ${selectedMonth}?`)) return;
+    setActionLoading(true);
+    setError("");
+    setSuccessMsg("");
+    try {
+      const res = await sendAllPayslips(selectedMonth, token);
+      setSuccessMsg(res.message || `Dispatched payslips for ${selectedMonth}!`);
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Failed to bulk send payslips.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
 
   // Download PDF
   const handleDownloadPdf = async (record) => {
@@ -495,6 +515,16 @@ export default function Payroll() {
               </button>
 
               <button
+                onClick={handleBulkEmailPayslips}
+                disabled={!filteredRecords.length || actionLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3.5 py-2.5 text-xs font-semibold text-sky-400 hover:bg-sky-500/20 disabled:opacity-50 transition"
+                title="Email PDF payslips to all employees for this month"
+              >
+                <Send size={15} />
+                Email All Payslips
+              </button>
+
+              <button
                 onClick={exportCSV}
                 disabled={!filteredRecords.length}
                 className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs font-semibold text-slate-200 hover:text-white disabled:opacity-50"
@@ -504,6 +534,7 @@ export default function Payroll() {
               </button>
             </div>
           </div>
+
 
           {/* Stats KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

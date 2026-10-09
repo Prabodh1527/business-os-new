@@ -97,6 +97,20 @@ export const sendPayslipEmail = async (id, token) => {
   return res.json();
 };
 
+export const sendAllPayslips = async (month, token) => {
+  const res = await fetch(`${API_BASE}/api/payroll/send-all`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ month }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Failed to bulk send payslips");
+  }
+  return res.json();
+};
+
+
 export const downloadPayslipPdf = async (id, filename, token) => {
   const res = await fetch(`${API_BASE}/api/payroll/${id}/payslip`, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },

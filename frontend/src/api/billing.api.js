@@ -68,3 +68,31 @@ export const deleteInvoice = async (id, token) => {
   if (!response.ok) throw new Error("Failed to delete invoice");
   return response.json();
 };
+
+export const downloadInvoicePdf = async (id, invoiceNumber, token) => {
+  const response = await fetch(`${API_BASE}/api/invoices/${id}/pdf`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error("Failed to generate PDF");
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Invoice_${invoiceNumber || id}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const emailInvoice = async (id, email, token) => {
+  const response = await fetch(`${API_BASE}/api/invoices/${id}/send`, {
+    method: "POST",
+    headers: getHeaders(token),
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to email invoice");
+  return data;
+};
+
