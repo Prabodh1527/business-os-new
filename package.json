@@ -1,0 +1,27 @@
+{
+  "name": "business_os",
+  "version": "1.0.0",
+  "description": "Business OS Full Stack Application",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "backend": "npm run dev --prefix backend",
+    "frontend": "npm run dev --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prabodh1527/BUSINESS_OS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Prabodh1527/BUSINESS_OS/issues"
+  },
+  "homepage": "https://github.com/Prabodh1527/BUSINESS_OS#readme",
+  "dependencies": {
+    "html2pdf.js": "^0.14.0",
+    "pdfkit": "^0.19.1",
+    "qrcode.react": "^4.2.0"
+  }
+}
