@@ -3,6 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Mail, KeyRound, Eye, EyeOff, RotateCw } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
 
+const RAW_BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
+  "http://localhost:5000";
+const API_URL = RAW_BASE.endsWith("/api")
+  ? `${RAW_BASE}/auth`
+  : `${RAW_BASE}/api/auth`;
+
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Send OTP, 2: Reset Password
@@ -24,7 +31,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+      const res = await fetch(`${API_URL}/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
@@ -53,7 +60,7 @@ export default function ForgotPassword() {
     setResending(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+      const res = await fetch(`${API_URL}/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
@@ -92,7 +99,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/reset-password", {
+      const res = await fetch(`${API_URL}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -2,7 +2,12 @@
 export const AUTH_STORAGE_KEY = "business-os-auth";
 export const ONBOARDING_STORAGE_KEY = "business-os-onboarding";
 
-const API_URL = "http://localhost:5000/api/auth";
+const RAW_BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
+  "http://localhost:5000";
+const API_URL = RAW_BASE.endsWith("/api")
+  ? `${RAW_BASE}/auth`
+  : `${RAW_BASE}/api/auth`;
 
 export const demoAccounts = {
   OWNER: {

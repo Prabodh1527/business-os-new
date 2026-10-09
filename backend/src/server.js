@@ -1,4 +1,4 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
@@ -96,7 +96,9 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/masters", masterRoutes);
+app.use("/masters", masterRoutes);
 app.use("/api/tenant", tenantRoutes);
+app.use("/tenant", tenantRoutes);
 
 // Expenses & Procurement
 app.use("/api/expenses", expenseRoutes);
