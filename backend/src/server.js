@@ -125,15 +125,58 @@ app.use("/api/audit-logs", auditLogRoutes);
 app.use("/audit-logs", auditLogRoutes);
 
 // ==========================================
-// HEALTH CHECK
+// HEALTH CHECK & DIAGNOSTICS
 // ==========================================
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
     message: "Business OS Backend Server is running healthy!",
+    smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+    smtpUser: process.env.SMTP_USER ? `${process.env.SMTP_USER.slice(0, 3)}***` : "none",
     timestamp: new Date().toISOString(),
   });
 });
+
+app.post("/api/health/test-email", async (req, res) => {
+  try {
+    const to = req.body.to || process.env.SMTP_USER;
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(400).json({
+        success: false,
+        message: "SMTP_USER or SMTP_PASS is missing in server environment variables.",
+      });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.verify();
+
+    await transporter.sendMail({
+      from: `"Business OS Test" <${process.env.SMTP_USER}>`,
+      to,
+      subject: "Business OS - Live Deployment Mail Test",
+      html: "<p>If you received this email, email delivery on your deployed cloud server is 100% operational!</p>",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Test email sent successfully to ${to}`,
+    });
+  } catch (error) {
+    console.error("❌ Live SMTP test failure:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to deliver email through Gmail SMTP",
+    });
+  }
+});
+
 
 // ==========================================
 // 404 HANDLER
