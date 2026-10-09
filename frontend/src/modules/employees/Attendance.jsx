@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   fetchAttendance,
   fetchAttendanceSummary,
+  fetchWeeklyAttendance,
   fetchAttendanceCorrections,
   recordAttendance,
   updateAttendanceRecord,
@@ -35,6 +36,7 @@ export default function Attendance() {
   const [corrections, setCorrections] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [weeklyTrends, setWeeklyTrends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState(
@@ -75,7 +77,7 @@ export default function Attendance() {
     try {
       if (!token) return;
       setError("");
-      const [attRes, empRes, correctionRes, summaryRes] = await Promise.all([
+      const [attRes, empRes, correctionRes, summaryRes, weeklyRes] = await Promise.all([
         fetchAttendance(token, { date: selectedDate }),
         fetchEmployees(token),
         fetchAttendanceCorrections(token),
@@ -83,11 +85,13 @@ export default function Attendance() {
           month: new Date(selectedDate).getMonth() + 1,
           year: new Date(selectedDate).getFullYear(),
         }),
+        fetchWeeklyAttendance(token),
       ]);
       if (attRes.success) setRecords(attRes.attendance || attRes.data || []);
       if (empRes.success) setEmployees(empRes.employees || empRes.data || []);
       if (correctionRes.success) setCorrections(correctionRes.corrections || correctionRes.data || []);
       if (summaryRes.success) setSummary(summaryRes.summary || null);
+      if (weeklyRes.success) setWeeklyTrends(weeklyRes.weekly || weeklyRes.data || []);
     } catch (err) {
       console.error("Failed to load attendance data:", err);
       setError(err.message || "Failed to load attendance data.");
@@ -365,7 +369,7 @@ export default function Attendance() {
       )}
 
       {/* Chart */}
-      <AttendanceChart />
+      <AttendanceChart data={weeklyTrends} />
 
       {/* Pending Attendance Correction Requests */}
       {corrections.some((c) => c.status === "Pending") && (

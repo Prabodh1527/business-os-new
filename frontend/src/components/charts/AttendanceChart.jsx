@@ -1,4 +1,4 @@
-﻿import {
+import {
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -11,12 +11,12 @@ import { Clock } from "lucide-react";
 
 export default function AttendanceChart({ data = [] }) {
   const chartData = data.length > 0 ? data : [
-    { day: "Mon", present: 8, late: 1, absent: 0 },
-    { day: "Tue", present: 9, late: 0, absent: 0 },
-    { day: "Wed", present: 7, late: 1, absent: 1 },
-    { day: "Thu", present: 8, late: 0, absent: 1 },
-    { day: "Fri", present: 9, late: 1, absent: 0 },
-    { day: "Sat", present: 6, late: 0, absent: 2 },
+    { day: "Mon", present: 0, late: 0, absent: 0 },
+    { day: "Tue", present: 0, late: 0, absent: 0 },
+    { day: "Wed", present: 0, late: 0, absent: 0 },
+    { day: "Thu", present: 0, late: 0, absent: 0 },
+    { day: "Fri", present: 0, late: 0, absent: 0 },
+    { day: "Sat", present: 0, late: 0, absent: 0 },
   ];
 
   return (

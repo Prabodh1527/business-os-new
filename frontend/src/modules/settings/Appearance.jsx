@@ -8,28 +8,44 @@ import {
   Loader2,
 } from "lucide-react";
 import API from "@/api/axios";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function Appearance() {
+  const {
+    theme,
+    brandColor,
+    compact,
+    showAnimations,
+    updateTheme,
+    updateBrandColor,
+    updateCompact,
+    updateShowAnimations,
+  } = useTheme();
+
   const [settings, setSettings] = useState({
-    theme: "Dark",
-    brandColor: "Indigo",
-    compact: false,
-    showAnimations: true,
+    theme,
+    brandColor,
+    compact,
+    showAnimations,
   });
 
   const [business, setBusiness] = useState(null);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSettings({ theme, brandColor, compact, showAnimations });
+  }, [theme, brandColor, compact, showAnimations]);
 
   useEffect(() => {
     const loadBusiness = async () => {
       try {
         setLoadingBusiness(true);
-
         const response = await API.get("/tenant/me");
-
         if (response.data?.success) {
-          setBusiness(response.data.data);
+          const b = response.data.data;
+          setBusiness(b);
         }
       } catch (error) {
         console.error("Failed to load business branding:", error);
@@ -42,25 +58,38 @@ export default function Appearance() {
   }, []);
 
   const handleChange = (e) => {
-    setSettings({
-      ...settings,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setSettings((prev) => ({ ...prev, [name]: value }));
+    if (name === "theme") updateTheme(value);
+    if (name === "brandColor") updateBrandColor(value);
   };
 
   const toggle = (key) => {
-    setSettings({
-      ...settings,
-      [key]: !settings[key],
-    });
+    const nextVal = !settings[key];
+    setSettings((prev) => ({ ...prev, [key]: nextVal }));
+    if (key === "compact") updateCompact(nextVal);
+    if (key === "showAnimations") updateShowAnimations(nextVal);
   };
 
-  const saveSettings = () => {
-    setSaved(true);
-
-    setTimeout(() => {
-      setSaved(false);
-    }, 2000);
+  const saveSettings = async () => {
+    try {
+      setSaving(true);
+      await API.put("/tenant/me", {
+        theme: settings.theme,
+        brandColor: settings.brandColor,
+        compactLayout: settings.compact,
+        showAnimations: settings.showAnimations,
+      });
+      localStorage.setItem("app-theme", settings.theme);
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+      }, 2500);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to save appearance settings");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const businessName = business?.companyName || "Business OS";
@@ -288,10 +317,11 @@ export default function Appearance() {
         <button
           type="button"
           onClick={saveSettings}
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-white hover:bg-indigo-500"
+          disabled={saving}
+          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-white transition hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
         >
-          <Save size={18} />
-          Save Appearance
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+          {saving ? "Saving..." : "Save Appearance"}
         </button>
 
         {saved && (

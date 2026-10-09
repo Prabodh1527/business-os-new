@@ -39,8 +39,11 @@ export default function RevenueReport() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
         <h2 className="text-lg font-semibold text-white">Revenue Trajectory</h2>
-        <div className="h-72 w-full">
-          <RevenueChart />
+        <div className="w-full">
+          <RevenueChart
+            totalRevenue={data?.revenue?.totalRevenue || 0}
+            chartData={data?.revenue?.monthlyRevenue || []}
+          />
         </div>
       </div>
     </div>

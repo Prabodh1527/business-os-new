@@ -173,6 +173,62 @@ router.get("/summary", async (req, res) => {
   }
 });
 
+// GET /api/attendance/weekly (aggregated daily stats for the current/selected week)
+router.get("/weekly", async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const now = new Date();
+    // Determine start of current week (Monday)
+    const currentDay = now.getDay(); // 0 is Sun, 1 is Mon...
+    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+
+    const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const weekData = [];
+
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayLabel = weekDays[i];
+
+      const records = await Attendance.find({
+        tenantId,
+        date: dateStr,
+      });
+
+      let present = 0;
+      let late = 0;
+      let absent = 0;
+
+      records.forEach((r) => {
+        if (r.status === "Present") present++;
+        else if (r.status === "Late") late++;
+        else if (r.status === "Absent") absent++;
+        else if (r.status === "Half Day") present++;
+      });
+
+      weekData.push({
+        day: dayLabel,
+        date: dateStr,
+        present,
+        late,
+        absent,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      weekly: weekData,
+      data: weekData,
+    });
+  } catch (error) {
+    console.error("❌ Attendance Weekly Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // GET /api/attendance (main list with date/employee filter)
 router.get("/", async (req, res) => {
   try {

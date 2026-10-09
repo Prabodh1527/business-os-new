@@ -23,6 +23,14 @@ export const fetchAttendanceSummary = async (token, params = {}) => {
   return res.json();
 };
 
+export const fetchWeeklyAttendance = async (token) => {
+  const res = await fetch(`${API_BASE}/api/attendance/weekly`, {
+    headers: getHeaders(token),
+  });
+  if (!res.ok) throw new Error("Failed to fetch weekly attendance trends");
+  return res.json();
+};
+
 export const clockIn = async (data, token) => {
   const res = await fetch(`${API_BASE}/api/attendance/clock-in`, {
     method: "POST",

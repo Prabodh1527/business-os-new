@@ -75,6 +75,47 @@ const tenantSchema = new mongoose.Schema(
       trim: true,
     },
 
+    theme: {
+      type: String,
+      default: "Dark",
+      trim: true,
+    },
+
+    brandColor: {
+      type: String,
+      default: "Indigo",
+      trim: true,
+    },
+
+    compactLayout: {
+      type: Boolean,
+      default: false,
+    },
+
+    showAnimations: {
+      type: Boolean,
+      default: true,
+    },
+
+    aiConfig: {
+      provider: {
+        type: String,
+        default: "gemini", // 'gemini' | 'ollama' | 'builtin'
+      },
+      modelName: {
+        type: String,
+        default: "gemini-1.5-flash",
+      },
+      apiKey: {
+        type: String,
+        default: "",
+      },
+      ollamaUrl: {
+        type: String,
+        default: "http://localhost:11434",
+      },
+    },
+
     openTime: {
       type: String,
       default: "",

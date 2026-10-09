@@ -4,6 +4,8 @@ import { attachTenantDB } from "../middleware/tenant.middleware.js";
 import Leave from "../models/leave.model.js";
 import LeavePolicy from "../models/LeavePolicy.js";
 import Attendance from "../models/attendance.model.js";
+import Notification from "../models/notification.model.js";
+import { sendLeaveDecisionEmail } from "../utils/email.js";
 import { getEmployeeIdentity, isEmployeeUser } from "../utils/employeeIdentity.js";
 
 const router = express.Router();
@@ -251,6 +253,18 @@ router.patch("/:id", async (req, res) => {
         curDate.setDate(curDate.getDate() + 1);
       }
     }
+
+    // Trigger employee email and in-app notification
+    sendLeaveDecisionEmail(updated).catch(() => {});
+    Notification.create({
+      tenantId: req.tenantId,
+      title: `Leave Request ${updated.status}`,
+      message: `Your leave request for ${updated.from} to ${updated.to} was ${updated.status.toLowerCase()} by ${req.user?.name || "Management"}.`,
+      type: "Employee",
+      recipientEmployeeId: updated.employeeId || "",
+      recipientEmail: updated.employeeEmail || "",
+      link: "/employee/leaves",
+    }).catch(() => {});
 
     return res.status(200).json({
       success: true,

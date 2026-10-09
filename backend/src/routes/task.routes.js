@@ -1,7 +1,10 @@
-﻿import express from "express";
+import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import { attachTenantDB } from "../middleware/tenant.middleware.js";
 import Task from "../models/task.model.js";
+import Employee from "../models/employee.model.js";
+import Notification from "../models/notification.model.js";
+import { sendTaskAssignmentEmail } from "../utils/email.js";
 import {
   employeeAssignmentFilter,
   getEmployeeIdentity,
@@ -61,18 +64,41 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Task title is required." });
     }
 
-    const identity = await getEmployeeIdentity(req);
+    let resolvedEmail = identity ? identity.email : req.body.assignedToEmail || "";
+    const assignedName = identity ? identity.name : assignedTo?.trim() || "Unassigned";
+
+    if (!resolvedEmail && assignedName !== "Unassigned") {
+      const emp = await Employee.findOne({
+        tenantId: req.tenantId,
+        $or: [{ name: assignedName }, { employeeId: assignedName }],
+      });
+      if (emp?.email) resolvedEmail = emp.email;
+    }
+
     const newTask = await Task.create({
       tenantId: req.tenantId,
       title: title.trim(),
       description: description?.trim() || "",
-      assignedTo: identity ? identity.name : assignedTo?.trim() || "Unassigned",
-      assignedToEmail: identity ? identity.email : req.body.assignedToEmail || "",
+      assignedTo: assignedName,
+      assignedToEmail: resolvedEmail,
       createdByUserId: identity ? req.user._id.toString() : "",
       priority: identity ? (["Low", "Medium", "High"].includes(priority) ? priority : "Medium") : priority || "Medium",
       dueDate: dueDate || new Date().toISOString().slice(0, 10),
       status: identity ? "Pending" : status || "Pending",
     });
+
+    // Notify employee via email and notification
+    if (resolvedEmail) {
+      sendTaskAssignmentEmail(newTask, resolvedEmail).catch(() => {});
+    }
+    Notification.create({
+      tenantId: req.tenantId,
+      title: "New Task Assigned",
+      message: `Task "${newTask.title}" assigned to ${assignedName} (Due: ${newTask.dueDate}).`,
+      type: "Employee",
+      recipientEmail: resolvedEmail,
+      link: "/employee/tasks",
+    }).catch(() => {});
 
     return res.status(201).json({
       success: true,

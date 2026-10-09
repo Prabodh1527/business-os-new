@@ -2,6 +2,8 @@ import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import { attachTenantDB } from "../middleware/tenant.middleware.js";
 import Appointment from "../models/appointment.model.js";
+import Notification from "../models/notification.model.js";
+import { sendAppointmentEmail } from "../utils/email.js";
 import { getEmployeeIdentity, isEmployeeUser } from "../utils/employeeIdentity.js";
 
 const router = express.Router();
@@ -141,6 +143,18 @@ router.post("/", async (req, res) => {
       notes,
     });
 
+    // Create system notification
+    Notification.create({
+      tenantId: req.tenantId,
+      title: "New Appointment Booked",
+      message: `${customerObj.name} booked ${service} on ${date} at ${time}.`,
+      type: "Appointment",
+      link: "/appointments",
+    }).catch(() => {});
+
+    // Send confirmation email to customer (if email exists)
+    sendAppointmentEmail(newAppointment, "CONFIRMED").catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: "Appointment booked successfully!",
@@ -194,6 +208,10 @@ router.patch("/:id", async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Appointment not found" });
+    }
+
+    if (req.body.status) {
+      sendAppointmentEmail(updated, updated.status).catch(() => {});
     }
 
     return res.status(200).json({

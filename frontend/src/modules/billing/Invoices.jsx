@@ -12,12 +12,14 @@ import {
   Printer,
   CreditCard,
   FileText,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   fetchInvoices,
   recordInvoicePayment,
   updateInvoiceStatus,
+  deleteInvoice,
 } from "@/api/billing.api";
 
 export default function Invoices() {
@@ -130,6 +132,17 @@ export default function Invoices() {
       await loadInvoices();
     } catch (err) {
       alert(err.message || "Failed to update status.");
+    }
+  };
+
+  // Handle Delete Invoice
+  const handleDeleteInvoice = async (id, invoiceNumber) => {
+    if (!window.confirm(`Are you sure you want to delete Invoice #${invoiceNumber}?`)) return;
+    try {
+      await deleteInvoice(id, token);
+      setInvoices((prev) => prev.filter((i) => i._id !== id));
+    } catch (err) {
+      alert(err.message || "Failed to delete invoice");
     }
   };
 
@@ -400,9 +413,16 @@ export default function Invoices() {
                       )}
                       <button
                         onClick={() => setSelectedInvoice(inv)}
-                        className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition"
+                        className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition cursor-pointer"
                       >
                         PDF Preview
+                      </button>
+                      <button
+                        onClick={() => handleDeleteInvoice(inv._id, inv.invoiceNumber)}
+                        className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-xs text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                        title="Delete Invoice"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </td>
                   </tr>

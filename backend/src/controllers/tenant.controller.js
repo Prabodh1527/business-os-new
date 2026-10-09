@@ -120,44 +120,49 @@ export const updateMyTenant = async (req, res) => {
       postalCode,
       website,
       logo,
+      theme,
+      brandColor,
+      compactLayout,
+      showAnimations,
       openTime,
       closeTime,
       onboardingCompleted,
     } = req.body;
 
-    if (!companyName?.trim()) {
+    if (companyName !== undefined && !companyName?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Business name is required.",
+        message: "Business name cannot be empty.",
       });
     }
 
-    tenant.companyName = companyName.trim();
-    tenant.businessType = businessType?.trim() || "Other";
-    tenant.description = description?.trim() || "";
-    tenant.businessEmail =
-      businessEmail?.trim().toLowerCase() || "";
-    tenant.businessPhone =
-      businessPhone?.trim() || "";
-    tenant.address =
-      address?.trim() || "";
-    tenant.city =
-      city?.trim() || "";
-    tenant.state =
-      state?.trim() || "";
-    tenant.country =
-      country?.trim() || "India";
-    tenant.postalCode =
-      postalCode?.trim() || "";
-    tenant.website =
-      website?.trim() || "";
-    tenant.logo =
-      logo || "";
+    if (companyName?.trim()) tenant.companyName = companyName.trim();
+    if (businessType !== undefined) tenant.businessType = businessType?.trim() || "Other";
+    if (description !== undefined) tenant.description = description?.trim() || "";
+    if (businessEmail !== undefined) tenant.businessEmail = businessEmail?.trim().toLowerCase() || "";
+    if (businessPhone !== undefined) tenant.businessPhone = businessPhone?.trim() || "";
+    if (address !== undefined) tenant.address = address?.trim() || "";
+    if (city !== undefined) tenant.city = city?.trim() || "";
+    if (state !== undefined) tenant.state = state?.trim() || "";
+    if (country !== undefined) tenant.country = country?.trim() || "India";
+    if (postalCode !== undefined) tenant.postalCode = postalCode?.trim() || "";
+    if (website !== undefined) tenant.website = website?.trim() || "";
+    if (logo !== undefined) tenant.logo = logo || "";
 
-    tenant.openTime =
-      openTime?.trim() || "";
-    tenant.closeTime =
-      closeTime?.trim() || "";
+    if (theme !== undefined) tenant.theme = theme;
+    if (brandColor !== undefined) tenant.brandColor = brandColor;
+    if (compactLayout !== undefined) tenant.compactLayout = Boolean(compactLayout);
+    if (showAnimations !== undefined) tenant.showAnimations = Boolean(showAnimations);
+
+    if (req.body.aiConfig !== undefined) {
+      tenant.aiConfig = {
+        ...tenant.aiConfig,
+        ...req.body.aiConfig,
+      };
+    }
+
+    if (openTime !== undefined) tenant.openTime = openTime?.trim() || "";
+    if (closeTime !== undefined) tenant.closeTime = closeTime?.trim() || "";
 
     if (onboardingCompleted === true) {
       tenant.onboardingCompleted = true;

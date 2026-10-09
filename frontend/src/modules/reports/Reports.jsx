@@ -40,25 +40,25 @@ export default function Reports() {
   const stats = [
     {
       title: 'Total Revenue',
-      value: data?.revenue ? `₹${Number(data.revenue).toLocaleString('en-IN')}` : '₹12,80,000',
+      value: `₹${Number(data?.revenue?.totalRevenue ?? data?.revenue ?? 0).toLocaleString('en-IN')}`,
       icon: IndianRupee,
       color: 'bg-emerald-500/10 text-emerald-400',
     },
     {
       title: 'Total Expenses',
-      value: data?.expenses ? `₹${Number(data.expenses).toLocaleString('en-IN')}` : '₹3,40,000',
+      value: `₹${Number(data?.expenses?.totalExpenses ?? data?.expenses ?? 0).toLocaleString('en-IN')}`,
       icon: Receipt,
       color: 'bg-rose-500/10 text-rose-400',
     },
     {
       title: 'Active Customers',
-      value: data?.customersCount ?? 856,
+      value: data?.customers?.activeCount ?? data?.customers?.totalCustomers ?? data?.customersCount ?? 0,
       icon: Users,
       color: 'bg-sky-500/10 text-sky-400',
     },
     {
       title: 'Inventory SKUs',
-      value: data?.productsCount ?? 486,
+      value: data?.inventory?.totalProducts ?? data?.productsCount ?? 0,
       icon: Package,
       color: 'bg-purple-500/10 text-purple-400',
     },
